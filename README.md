@@ -17,25 +17,40 @@
 ## クイックスタート
 
 ```bash
-git clone https://github.com/<owner>/speech-habit-lens
+git clone https://github.com/kenimo49/speech-habit-lens
 cd speech-habit-lens
 cp .env.example .env
 # .env に AMIVOICE_API_KEY と ANTHROPIC_API_KEY を記入
 pip install -e .
 
-# サンプル音声で動作確認
+# CLI で解析
 shl analyze examples/sample.wav --out /tmp/report.md
+
+# ブラウザ UI で解析 (Streamlit、ローカル起動)
+shl serve
+# → http://localhost:8501 が開く、wav をドロップして解析
 ```
 
 ## 使い方
+
+### CLI
 
 ```bash
 # 1本解析
 shl analyze my-pitch.wav --out reports/2026-05-22.md
 
-# before/after 比較 (v1.0)
+# before/after 比較 (v0.2)
 shl compare before.wav after.wav
 ```
+
+### Streamlit UI
+
+```bash
+shl serve                    # localhost:8501 で起動
+shl serve --port 9999       # ポート指定
+```
+
+ローカルで動作するので API key はブラウザに露出しない。`.env` から server 側で読み込む。
 
 ## 必要なAPIキー
 
