@@ -1,7 +1,6 @@
 # Design Document
 
-このリポジトリの設計思想は iris-hub に保管されている設計ドラフトを一次ソースとする。
+設計ドキュメントは **GitHub Issue #1** が一次ソース:
+https://github.com/kenimo49/speech-habit-lens/issues/1
 
-将来 GitHub Issue #1 として転記される予定。
-
-リポジトリ公開後はこのファイルに設計ドラフトの内容をコピーし、iris-hub側のドラフトは「履歴」として残す方針。
+履歴用コピーは `iris-hub/tasks/speech-habit-lens-design.md` に保管されている (private)。
