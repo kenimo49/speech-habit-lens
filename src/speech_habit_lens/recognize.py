@@ -27,6 +27,7 @@ DEFAULT_POLL_INTERVAL_S = 2.0
 DEFAULT_POLL_TIMEOUT_S = 300.0
 SUBMIT_RETRY_DELAYS_S = (2.0, 4.0, 8.0)
 RATE_LIMIT_BACKOFF_S = 60.0
+PROGRESS_LOG_INTERVAL_S = 10.0
 
 
 class AmiVoiceError(Exception):
@@ -132,10 +133,20 @@ def _poll_until_done(
     interval_s: float,
     timeout_s: float,
 ) -> dict[str, Any]:
+    """Poll GET endpoint until status=completed.
+
+    Emits an INFO log every PROGRESS_LOG_INTERVAL_S seconds while polling so
+    the operator can see the job is alive (AmiVoice can take 60-90s for 60s
+    audio + ESAS).
+    """
     url = AMIVOICE_RESULT_URL_TMPL.format(session_id=session_id)
     headers = {"Authorization": f"Bearer {api_key}"}
 
-    deadline = time.monotonic() + timeout_s
+    start = time.monotonic()
+    deadline = start + timeout_s
+    last_progress_log = start
+    last_status: str | None = None
+
     while time.monotonic() <= deadline:
         resp = httpx.get(url, headers=headers, timeout=30.0)
         if resp.status_code == 429:
@@ -145,17 +156,26 @@ def _poll_until_done(
         resp.raise_for_status()
         body = resp.json()
         status = body.get("status")
+        last_status = status
         logger.debug("Poll status=%s", status)
 
         if status == "completed":
+            elapsed = time.monotonic() - start
+            logger.info("Recognition completed (elapsed %.1fs)", elapsed)
             return body
         if status in ("error", "failed"):
             raise AmiVoiceError(f"Job failed: status={status}, body={body}")
 
+        now = time.monotonic()
+        if now - last_progress_log >= PROGRESS_LOG_INTERVAL_S:
+            logger.info("Polling... elapsed %.0fs, status=%s", now - start, status)
+            last_progress_log = now
+
         time.sleep(interval_s)
 
     raise AmiVoiceError(
-        f"Polling timed out after {timeout_s}s (session_id={session_id})"
+        f"Polling timed out after {timeout_s}s "
+        f"(session_id={session_id}, last_status={last_status})"
     )
 
 

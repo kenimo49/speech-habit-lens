@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,8 +30,15 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 # Bumped from 2048 after observing truncated JSON output on the first live run.
 MAX_TOKENS_PER_LAYER = 4096
 
-# Where to dump raw layer outputs for debugging. Override with $SHL_DEBUG_DIR.
-DEFAULT_DEBUG_DIR = Path("/tmp")
+# Per-process debug directory (avoids race conditions in parallel `shl analyze`
+# runs). Override with $SHL_DEBUG_DIR.
+_PROCESS_TAG = f"{os.getpid()}-{int(time.time())}"
+DEFAULT_DEBUG_DIR = Path("/tmp") / f"shl-{_PROCESS_TAG}"
+
+# Allow one automatic retry when JSON parsing fails on a stop_reason=end_turn
+# response (the LLM occasionally generates malformed JSON for transcripts
+# containing unusual character sequences).
+JSON_PARSE_RETRY_COUNT = 1
 
 
 class AnalysisError(Exception):
@@ -83,58 +91,94 @@ def _call_layer(
     layer_name: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
+    """Call one layer with automatic JSON-parse retry on end_turn failures.
+
+    Retries are only triggered when stop_reason=end_turn (the model
+    voluntarily stopped). max_tokens truncation is not retried since the
+    same prompt will likely truncate again.
+    """
     system_prompt = (PROMPTS_DIR / f"{layer_name}.md").read_text(encoding="utf-8")
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     user_content = f"以下のデータを分析してください。\n\n```json\n{payload_json}\n```"
 
-    logger.info(
-        "[%s] calling %s (max_tokens=%d, payload_chars=%d)",
-        layer_name,
-        model,
-        MAX_TOKENS_PER_LAYER,
-        len(payload_json),
-    )
+    last_error: AnalysisError | None = None
+    last_debug_info: dict[str, Any] = {}
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=MAX_TOKENS_PER_LAYER,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_content}],
-    )
-
-    raw_text = "".join(b.text for b in response.content if b.type == "text")
-    stop_reason = response.stop_reason
-    input_tokens = response.usage.input_tokens
-    output_tokens = response.usage.output_tokens
-
-    logger.info(
-        "[%s] response: stop=%s, input=%d, output=%d, chars=%d",
-        layer_name,
-        stop_reason,
-        input_tokens,
-        output_tokens,
-        len(raw_text),
-    )
-
-    debug_path = _dump_raw(layer_name, raw_text, stop_reason, input_tokens, output_tokens)
-
-    if stop_reason == "max_tokens":
-        logger.warning(
-            "[%s] hit max_tokens limit (%d). Output likely truncated. "
-            "Consider raising MAX_TOKENS_PER_LAYER or tightening the prompt.",
-            layer_name,
+    for attempt in range(JSON_PARSE_RETRY_COUNT + 1):
+        attempt_label = f"{layer_name}" if attempt == 0 else f"{layer_name}/retry{attempt}"
+        logger.info(
+            "[%s] calling %s (max_tokens=%d, payload_chars=%d)",
+            attempt_label,
+            model,
             MAX_TOKENS_PER_LAYER,
+            len(payload_json),
         )
 
-    try:
-        return _extract_json(raw_text, layer_name)
-    except AnalysisError as e:
-        raise AnalysisError(
-            f"{e}\n\n"
-            f"Stop reason: {stop_reason}\n"
-            f"Tokens: input={input_tokens}, output={output_tokens}\n"
-            f"Full raw output: {debug_path}"
-        ) from e
+        response = client.messages.create(
+            model=model,
+            max_tokens=MAX_TOKENS_PER_LAYER,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_content}],
+        )
+
+        raw_text = "".join(b.text for b in response.content if b.type == "text")
+        stop_reason = response.stop_reason
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+
+        logger.info(
+            "[%s] response: stop=%s, input=%d, output=%d, chars=%d",
+            attempt_label,
+            stop_reason,
+            input_tokens,
+            output_tokens,
+            len(raw_text),
+        )
+
+        debug_path = _dump_raw(
+            attempt_label.replace("/", "-"),
+            raw_text,
+            stop_reason,
+            input_tokens,
+            output_tokens,
+        )
+
+        last_debug_info = {
+            "stop_reason": stop_reason,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "debug_path": debug_path,
+        }
+
+        if stop_reason == "max_tokens":
+            logger.warning(
+                "[%s] hit max_tokens limit (%d). Output likely truncated.",
+                attempt_label,
+                MAX_TOKENS_PER_LAYER,
+            )
+
+        try:
+            return _extract_json(raw_text, layer_name)
+        except AnalysisError as e:
+            last_error = e
+            # Only retry if the model voluntarily stopped (not on truncation).
+            if attempt < JSON_PARSE_RETRY_COUNT and stop_reason == "end_turn":
+                logger.warning(
+                    "[%s] JSON parse failed (%s). Retrying once.",
+                    attempt_label,
+                    str(e).splitlines()[0] if str(e) else "unknown",
+                )
+                continue
+            break
+
+    assert last_error is not None
+    raise AnalysisError(
+        f"{last_error}\n\n"
+        f"Stop reason: {last_debug_info['stop_reason']}\n"
+        f"Tokens: input={last_debug_info['input_tokens']}, "
+        f"output={last_debug_info['output_tokens']}\n"
+        f"Full raw output: {last_debug_info['debug_path']}"
+    ) from last_error
 
 
 def _dump_raw(

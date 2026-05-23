@@ -166,6 +166,10 @@ speech-habit-lens/
 
 ---
 
+## ケーススタディ
+
+- [**4本の名スピーチを1分ずつ解析した比較**](docs/case-studies/4-pitches-comparison.md) — Steve Jobs / 孫正義 / 西野亮廣 / 落合陽一 を ESAS × Claude で比較。結論位置・フィラー・身体と言葉のラグなど、人によって違うクセが定量化される
+
 ## 関連ドキュメント
 
 - [アーキテクチャ設計書](docs/design.md) — 全モジュールの責務・データ構造・エラー処理

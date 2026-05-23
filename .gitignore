@@ -11,3 +11,7 @@ build/
 reports/
 *.wav
 !examples/*.wav
+
+# Private analysis data (YouTube DL, third-party speech audio, personal
+# reports). Never committed — see CLAUDE.md / README.md.
+data/private/
