@@ -3,7 +3,7 @@ name = "speech-habit-lens"
 version = "0.1.0"
 description = "1分間スピーチの癖を AmiVoice ESAS × LLM で可視化する CLI"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "ken imoto" }]
 dependencies = [
