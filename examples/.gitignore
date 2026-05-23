@@ -1,0 +1,12 @@
+# Audio samples are NOT committed to the repository.
+# Most sources we work with are CC BY-ND or other licenses where
+# bundling derived/extracted clips in a public repo is ambiguous.
+#
+# Each user fetches samples locally via tools/fetch_speech.sh.
+# See examples/CREDITS.md for the canonical commands per sample.
+*.wav
+*.mp3
+*.mp4
+*.m4a
+*.ogg
+*.flac
