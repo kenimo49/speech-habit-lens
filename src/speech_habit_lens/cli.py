@@ -64,9 +64,31 @@ def analyze(wav_path: Path, out_path: Path | None, model: str, no_esas: bool) ->
 
 @main.command()
 @click.option("--port", default=8501, show_default=True, type=int, help="Streamlit port")
-def serve(port: int) -> None:
-    """Streamlit UIを起動（v0.2予定）"""
-    raise click.UsageError("Streamlit UI is planned for v0.2 — not yet implemented.")
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    show_default=True,
+    help="ブラウザ自動オープンを抑制",
+)
+def serve(port: int, headless: bool) -> None:
+    """Streamlit UI をローカルで起動する"""
+    import subprocess
+    import sys
+
+    webui_path = Path(__file__).resolve().parent / "webui.py"
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(webui_path),
+        "--server.port",
+        str(port),
+        "--server.headless",
+        "true" if headless else "false",
+    ]
+    click.echo(f"→ Starting Streamlit at http://localhost:{port}")
+    subprocess.run(cmd, check=False)
 
 
 if __name__ == "__main__":
