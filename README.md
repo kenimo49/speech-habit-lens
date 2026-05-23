@@ -1,5 +1,7 @@
 # speech-habit-lens
 
+![speech-habit-lens — speech analysis with three-layer ESAS × Claude](docs/images/hero.png)
+
 > 1分間スピーチの癖を、AmiVoice ESAS（感情20パラメータ）× Claude の三層解析で可視化する CLI + Streamlit UI
 
 **Status:** v0.1 (Zennfes Spring 2026 提出予定) ｜ **License:** MIT
