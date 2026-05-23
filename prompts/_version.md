@@ -16,9 +16,16 @@
 
 ### チューニング履歴
 
-- **2026-05-23 v0.1**: 初版。チューニング未実施。
-  - 計測対象: Stallman 60秒（英語）, Stalman は ESAS 27 samples / 3 transcript segments
-  - 次回計測: ken本人の日本語1分スピーチを通したときの出力品質
+- **2026-05-23 v0.1**: 初版。Stallman 60秒で初回 E2E。
+  - acoustic / text / cross すべて完走、stop=end_turn
+  - cross_layer 出力 2,429 tokens（max_tokens=4096 に対し余裕あり）
+  - 観察品質は高いが、各 pattern の significance が 200-300字と冗長
+
+- **2026-05-23 v0.1.1**: 冗長性を削減（v0.1 出力レビューから）
+  - acoustic.habits: 「3-5個」→「ちょうど3個」、description 2文以内150字
+  - cross.patterns: 「3-5個」→「ちょうど3個」、significance 1文100字
+  - cross.improvements: 「2-3個」→「ちょうど2個」、suggestion 1文80字
+  - 狙い: 読み手の認知負荷を下げて、最も鋭い観察に集中させる
 
 ### 今後の検討項目
 
