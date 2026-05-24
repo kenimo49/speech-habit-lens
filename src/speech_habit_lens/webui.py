@@ -10,12 +10,15 @@ browser.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit_mic_recorder import mic_recorder
 
 from speech_habit_lens.analyze import analyze as run_analysis
 from speech_habit_lens.esas import ESAS_PARAMS, EsasTimeline, parse_esas
@@ -26,6 +29,28 @@ load_dotenv()
 
 
 DEFAULT_PARAMS = ("energy", "stress", "concentration")
+
+
+def _to_amivoice_wav(src_bytes: bytes, src_suffix: str) -> Path:
+    """Normalize arbitrary audio bytes to AmiVoice spec (16kHz mono 16-bit PCM)."""
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg not found in PATH. Install via `apt install ffmpeg`.")
+    src = Path(tempfile.mkstemp(suffix=src_suffix)[1])
+    src.write_bytes(src_bytes)
+    dst = Path(tempfile.mkstemp(suffix=".wav")[1])
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", str(src),
+                "-ac", "1", "-ar", "16000", "-sample_fmt", "s16",
+                str(dst),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        src.unlink(missing_ok=True)
+    return dst
 
 
 def main() -> None:
@@ -52,25 +77,53 @@ def main() -> None:
             "ブラウザには露出しません。"
         )
 
-    uploaded = st.file_uploader(
-        "WAVファイルをアップロード（16kHz/mono推奨、30-90秒）",
-        type=["wav"],
-        help="長さ 30〜90秒、サンプリングレート 16kHz, モノラル, 16-bit PCM を推奨",
-    )
+    tab_record, tab_upload = st.tabs(["🎙 録音する", "📁 ファイルをアップロード"])
 
-    if uploaded is None:
-        st.info(
-            "WAVファイルをアップロードしてください。"
-            "サンプルがない場合は `tools/fetch_speech.sh` で取得できます "
-            "（`examples/CREDITS.md` 参照）。"
+    wav_path: Path | None = None
+    audio_preview: bytes | None = None
+    audio_preview_format = "audio/wav"
+
+    with tab_record:
+        st.caption(
+            "ブラウザで直接録音します。60秒前後を目安に録音してください。"
+            "停止後に自動で AmiVoice 仕様（16kHz / mono / 16-bit PCM）に変換します。"
         )
+        rec_audio = mic_recorder(
+            start_prompt="🔴 録音開始",
+            stop_prompt="⏹ 停止",
+            format="webm",
+            use_container_width=True,
+            key="shl_mic",
+        )
+        if rec_audio:
+            try:
+                wav_path = _to_amivoice_wav(rec_audio["bytes"], src_suffix=".webm")
+                audio_preview = rec_audio["bytes"]
+                audio_preview_format = "audio/webm"
+            except (RuntimeError, subprocess.CalledProcessError) as exc:
+                st.error(f"音声変換に失敗しました: {exc}")
+                return
+
+    with tab_upload:
+        uploaded = st.file_uploader(
+            "WAVファイルをアップロード（16kHz/mono推奨、30-90秒）",
+            type=["wav"],
+            help="長さ 30〜90秒、サンプリングレート 16kHz, モノラル, 16-bit PCM を推奨",
+        )
+        if uploaded is not None and wav_path is None:
+            tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            tmp.write(uploaded.read())
+            tmp.close()
+            wav_path = Path(tmp.name)
+            audio_preview = uploaded.getvalue()
+            audio_preview_format = "audio/wav"
+
+    if wav_path is None:
+        st.info("録音またはWAVファイルのアップロードを行ってください。")
         return
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp.write(uploaded.read())
-        wav_path = Path(tmp.name)
-
-    st.audio(uploaded.getvalue(), format="audio/wav")
+    if audio_preview:
+        st.audio(audio_preview, format=audio_preview_format)
 
     if not st.button("🔍 解析を開始", type="primary"):
         return
