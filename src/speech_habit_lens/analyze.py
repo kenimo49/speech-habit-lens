@@ -209,16 +209,18 @@ def _dump_raw(
 
 
 def _extract_json(text: str, layer_name: str) -> dict[str, Any]:
-    """Tolerate markdown code-fence wrapping that Claude sometimes adds."""
+    """Tolerate markdown code-fence wrapping and trailing prose Claude adds."""
     text = text.strip()
     if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip().startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines)
+        nl = text.find("\n")
+        if nl != -1:
+            text = text[nl + 1 :].lstrip()
+    # raw_decode reads JSON from the start and ignores anything after, so a
+    # trailing ``` fence or markdown commentary appended by the model does
+    # not break parsing.
     try:
-        return json.loads(text)
+        obj, _ = json.JSONDecoder().raw_decode(text)
+        return obj
     except json.JSONDecodeError as e:
         raise AnalysisError(
             f"{layer_name} returned unparseable JSON: {e}\n"

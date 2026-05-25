@@ -18,7 +18,6 @@ from pathlib import Path
 import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
-from streamlit_mic_recorder import mic_recorder
 
 from speech_habit_lens.analyze import analyze as run_analysis
 from speech_habit_lens.esas import ESAS_PARAMS, EsasTimeline, parse_esas
@@ -88,18 +87,221 @@ def main() -> None:
             "ブラウザで直接録音します。60秒前後を目安に録音してください。"
             "停止後に自動で AmiVoice 仕様（16kHz / mono / 16-bit PCM）に変換します。"
         )
-        rec_audio = mic_recorder(
-            start_prompt="🔴 録音開始",
-            stop_prompt="⏹ 停止",
-            format="webm",
-            use_container_width=True,
-            key="shl_mic",
+
+        st.components.v1.html(
+            """
+<div style="font-size:13px; margin-bottom:8px;">
+  下の録音widgetが使うマイク:
+  <span id="shl-default-mic" style="font-weight:600;">取得中...</span>
+</div>
+<script>
+(async () => {
+  const target = document.getElementById('shl-default-mic');
+  try {
+    let granted = false;
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const perm = await navigator.permissions.query({name: 'microphone'});
+        granted = (perm.state === 'granted');
+      } catch (_) {}
+    }
+    if (!granted) {
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({audio: true});
+        probe.getTracks().forEach(t => t.stop());
+        granted = true;
+      } catch (e) {
+        target.textContent = '未取得（録音ボタンを一度押して権限付与してください）';
+        return;
+      }
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const label = stream.getAudioTracks()[0].label || '(no label)';
+    stream.getTracks().forEach(t => t.stop());
+    target.textContent = label;
+  } catch (e) {
+    target.textContent = '取得失敗: ' + e.message;
+  }
+})();
+</script>
+""",
+            height=40,
         )
-        if rec_audio:
+
+        with st.expander("別のマイクに切り替える手順（Chrome）"):
+            st.markdown(
+                "**方法A: グローバル既定マイクを変える（手早い）**\n\n"
+                "1. 下のURLをコピーしてアドレスバーに貼り付け（chrome:// URLはクリックでは開けない）:\n"
+            )
+            st.code("chrome://settings/content/microphone", language=None)
+            st.markdown(
+                "2. ページ上部の **マイク** ドロップダウンから使いたいデバイスを選ぶ\n"
+                "3. このページに戻って **Ctrl+Shift+R** でハードリロード\n\n"
+                "**方法B: このサイトだけ切替（他サイトに影響なし）**\n\n"
+                "1. アドレスバー左の鍵アイコンをクリック\n"
+                "2. **サイトの設定** を開く\n"
+                "3. **マイク** のドロップダウンから使いたいデバイスを選ぶ\n"
+                "4. ハードリロード（Ctrl+Shift+R）"
+            )
+
+        rec_audio = st.audio_input(
+            "下の丸いマイクボタンを押すと録音開始 / もう一度押すと停止",
+            key="shl_mic",
+            help="ボタンを押すとブラウザがマイク権限を要求します。許可後、再度ボタンを押すと録音開始します。",
+        )
+
+        with st.expander("録音が無音になるとき / デバイス指定テスト"):
+            st.caption(
+                "マイクから本当に音が来ているか、別デバイスで動作確認できます。"
+                "ここのテストは録音widgetとは独立で、デバイスIDを指定して動作確認するためのものです。"
+            )
+            st.components.v1.html(
+                """
+<div style="margin-bottom:8px;">
+  <button id="shl-list-devices" style="padding:6px 12px; cursor:pointer; margin-right:6px;">
+    デバイス一覧を読み込む
+  </button>
+  <select id="shl-device" style="padding:6px; margin-right:6px; min-width:280px;">
+    <option value="">(ブラウザ既定)</option>
+  </select>
+</div>
+<div style="margin-bottom:8px;">
+  <button id="shl-meter" style="padding:6px 12px; cursor:pointer; margin-right:6px;">
+    音声レベル測定 (10秒)
+  </button>
+  <button id="shl-rec-test" style="padding:6px 12px; cursor:pointer;">
+    5秒テスト録音
+  </button>
+</div>
+<div id="shl-level-bar" style="height:8px; background:#e3dfd2; border-radius:2px; margin-bottom:8px; overflow:hidden;">
+  <div id="shl-level-fill" style="height:100%; width:0%; background:#1e3a8a; transition:width 0.05s;"></div>
+</div>
+<div id="shl-debug-panel" style="font-family:ui-monospace,monospace; font-size:11px; padding:8px; background:#f0eee8; color:#1a1a2e; max-height:240px; overflow-y:auto; border:1px solid #d4d0c4; border-radius:4px; white-space:pre-wrap;"></div>
+<script>
+(function(){
+  const panel = document.getElementById('shl-debug-panel');
+  const fill = document.getElementById('shl-level-fill');
+  const log = (msg) => {
+    const t = new Date().toLocaleTimeString();
+    panel.innerHTML += '[' + t + '] ' + msg + '\\n';
+    panel.scrollTop = panel.scrollHeight;
+    console.log('[SHL-DEBUG]', msg);
+  };
+
+  window.addEventListener('error', (e) => log('window.error: ' + e.message));
+  window.addEventListener('unhandledrejection', (e) => log('unhandledrejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
+
+  log('isSecureContext=' + window.isSecureContext);
+  log('UA=' + navigator.userAgent);
+
+  const getConstraints = () => {
+    const sel = document.getElementById('shl-device');
+    if (sel.value) {
+      return {audio: {deviceId: {exact: sel.value}}};
+    }
+    return {audio: true};
+  };
+
+  document.getElementById('shl-list-devices').onclick = async () => {
+    try {
+      log('デバイス一覧取得');
+      const tmp = await navigator.mediaDevices.getUserMedia({audio: true});
+      tmp.getTracks().forEach(t => t.stop());
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      const audio_in = devs.filter(d => d.kind === 'audioinput');
+      log('audioinput=' + audio_in.length + '件');
+      const sel = document.getElementById('shl-device');
+      sel.innerHTML = '<option value="">(ブラウザ既定)</option>';
+      audio_in.forEach((d, i) => {
+        log('  [' + i + '] ' + d.label);
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = '[' + i + '] ' + (d.label || '(no label)');
+        sel.appendChild(opt);
+      });
+    } catch(e) {
+      log('catch: ' + e.name + ': ' + e.message);
+    }
+  };
+
+  document.getElementById('shl-meter').onclick = async () => {
+    try {
+      log('音声レベル測定開始 (10秒、話してください)');
+      const stream = await navigator.mediaDevices.getUserMedia(getConstraints());
+      const tracks = stream.getAudioTracks();
+      log('使用マイク: ' + tracks[0].label);
+      const settings = tracks[0].getSettings();
+      log('  sampleRate=' + settings.sampleRate + ' channels=' + settings.channelCount);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      src.connect(analyser);
+      const buf = new Uint8Array(analyser.fftSize);
+      const t0 = Date.now();
+      let maxRms = 0;
+      const tick = () => {
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / buf.length);
+        const pct = Math.min(100, rms * 200);
+        fill.style.width = pct + '%';
+        if (rms > maxRms) maxRms = rms;
+        if (Date.now() - t0 < 10000) {
+          requestAnimationFrame(tick);
+        } else {
+          stream.getTracks().forEach(t => t.stop());
+          ctx.close();
+          fill.style.width = '0%';
+          const verdict = maxRms < 0.001 ? '完全無音（マイクが信号を出していない）'
+                        : maxRms < 0.01 ? 'ほぼ無音'
+                        : '音声検出 OK';
+          log('測定完了 maxRMS=' + maxRms.toFixed(4) + ' → ' + verdict);
+        }
+      };
+      tick();
+    } catch(e) {
+      log('catch: ' + e.name + ': ' + e.message);
+    }
+  };
+
+  document.getElementById('shl-rec-test').onclick = async () => {
+    try {
+      log('5秒テスト録音開始');
+      const stream = await navigator.mediaDevices.getUserMedia(getConstraints());
+      log('使用マイク: ' + stream.getAudioTracks()[0].label);
+      const rec = new MediaRecorder(stream);
+      log('MediaRecorder mimeType=' + rec.mimeType);
+      const chunks = [];
+      rec.ondataavailable = (e) => { chunks.push(e.data); log('chunk size=' + e.data.size); };
+      rec.onerror = (e) => log('rec.onerror: ' + e.error);
+      rec.onstop = () => {
+        const blob = new Blob(chunks, {type: rec.mimeType});
+        log('録音完了 blob size=' + blob.size);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      rec.start();
+      setTimeout(() => rec.stop(), 5000);
+    } catch (e) {
+      log('catch: ' + e.name + ': ' + e.message);
+    }
+  };
+})();
+</script>
+""",
+                height=440,
+                scrolling=True,
+            )
+        if rec_audio is not None:
+            rec_bytes = rec_audio.getvalue()
             try:
-                wav_path = _to_amivoice_wav(rec_audio["bytes"], src_suffix=".webm")
-                audio_preview = rec_audio["bytes"]
-                audio_preview_format = "audio/webm"
+                wav_path = _to_amivoice_wav(rec_bytes, src_suffix=".wav")
+                audio_preview = rec_bytes
+                audio_preview_format = "audio/wav"
             except (RuntimeError, subprocess.CalledProcessError) as exc:
                 st.error(f"音声変換に失敗しました: {exc}")
                 return
