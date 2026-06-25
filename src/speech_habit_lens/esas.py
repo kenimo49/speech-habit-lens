@@ -6,14 +6,21 @@ This module converts that nested JSON into a flat EsasTimeline structure
 that downstream analysis (acoustic_layer prompts, Plotly charts) can consume.
 
 Parameter names confirmed empirically from AmiVoice response on 2026-05-23
-(official docs only listed 5 examples). All 20:
+and re-verified on 2026-06-25 via GET /v1/sentiment-analysis/ja/result-parameters.json
+(official `name` field). All 20:
 
   energy, content, upset, aggression, stress, uncertainty, excitement,
   concentration, emo_cog, hesitation, brain_power, embarrassment,
   intensive_thinking, imagination_activity, extreme_emotion, passionate,
   atmosphere, anticipation, dissatisfaction, confidence
 
-Each value is an integer 0-100 (scale confirmed from observation).
+Value ranges vary per parameter:
+  - 0-100: energy, stress, concentration, anticipation, intensive_thinking, brain_power
+  - 1-500: emo_cog (Emotional-Balanced-Logical)
+  - -100~100: atmosphere
+  - 0-30: the remaining 12 (excitement, hesitation, uncertainty, imagination_activity,
+    embarrassment, passionate, confidence, aggression, upset, content,
+    dissatisfaction, extreme_emotion)
 """
 
 from __future__ import annotations

@@ -134,7 +134,7 @@ extreme_emotion, passionate, atmosphere, anticipation,
 dissatisfaction, confidence
 ```
 
-各値は 0-100 の整数で、約 2.2 秒間隔でサンプリングされます。
+値域はパラメータごとに異なる整数で（公式 [`/v1/sentiment-analysis/ja/result-parameters.json`](https://docs.amivoice.com/en/amivoice-api/manual/reference-list-sentiment-analysis-parameters/) 確認、`emo_cog` は 1-500、`atmosphere` は -100~100、`energy / stress / concentration / anticipation / intensive_thinking / brain_power` は 0-100、残り 12 個は 0-30）、約 2 秒間隔でサンプリングされます。
 
 ---
 

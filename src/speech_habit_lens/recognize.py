@@ -95,7 +95,7 @@ def recognize(
 
 
 def _submit_job(wav_path: Path, api_key: str, engine: str, esas: bool) -> str:
-    d_parts = [f"grammarFileNames={engine}"]
+    d_parts = [f"grammarFileNames={engine}", "keepFillerToken=1"]
     if esas:
         d_parts.append("sentimentAnalysis=True")
     d_value = " ".join(d_parts)
