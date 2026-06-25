@@ -4,7 +4,7 @@
 
 > 1分間スピーチの癖を、AmiVoice ESAS（感情20パラメータ）× Claude の三層解析で可視化する CLI + Streamlit UI
 
-**Status:** v0.1 (Zennfes Spring 2026 提出予定) ｜ **License:** MIT
+**Status:** v0.2（Zennfes Spring 2026 提出版）｜ **License:** MIT
 
 ---
 
@@ -89,7 +89,8 @@ shl serve
 # → http://localhost:8501 をブラウザで開く
 ```
 
-- WAV ファイルをドラッグ&ドロップ
+- **「🎙 録音する」タブ**: ブラウザのマイクから直接録音（`st.audio_input`）、停止後に自動で AmiVoice 仕様（16kHz / mono / 16-bit PCM）に変換
+- **「📁 ファイルをアップロード」タブ**: 既存のWAVをドラッグ&ドロップ
 - ESAS 時系列を Plotly でインタラクティブ表示（パラメータの追加/削除可）
 - クロス層パターンを expandable カードで確認
 - Markdown レポートをダウンロード

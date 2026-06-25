@@ -462,7 +462,7 @@ def _render_esas_chart(esas: EsasTimeline) -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
         margin=dict(l=40, r=20, t=20, b=40),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 if __name__ == "__main__":
