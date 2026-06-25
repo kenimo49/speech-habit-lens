@@ -9,32 +9,36 @@ JSON オブジェクトを受け取ります:
 - `duration_ms` — スピーチ全体の長さ（ミリ秒）
 - `samples` — 約2秒間隔のサンプル配列（各サンプルに `start_ms`, `end_ms` と 20 のパラメータ）
 
-20 パラメータ（各サンプルで整数）:
+20 パラメータ（各サンプルで整数）。値域は公式 `GET /v1/sentiment-analysis/ja/result-parameters.json` で確認済み:
 
 | パラメータ | 意味 | 値域 |
 |---|---|---|
 | `energy` | 声のエネルギー | 0-100 |
-| `content` | 満足感 | 0-100 |
-| `upset` | 動揺 | 0-100 |
-| `aggression` | 主張・攻撃性 | 0-100 |
 | `stress` | 声のストレス | 0-100 |
-| `uncertainty` | 不確実さ | 0-100 |
-| `excitement` | 興奮 | 0-100 |
+| `emo_cog` | 感情×論理のバランス（Emotional-Balanced-Logical） | **1-500（他より広い値域）** |
 | `concentration` | 集中 | 0-100 |
-| `emo_cog` | 感情×論理のバランス（Emotional-Balanced-Logical） | **0-300（他より広い値域）** |
-| `hesitation` | 躊躇 | 0-100 |
-| `brain_power` | 認知負荷（脳活動） | 0-100 |
-| `embarrassment` | 当惑 | 0-100 |
-| `intensive_thinking` | 深い思考 | 0-100 |
-| `imagination_activity` | 想像活動 | 0-100 |
-| `extreme_emotion` | 極端な感情スパイク | 0-100 |
-| `passionate` | 情熱 | 0-100 |
-| `atmosphere` | 雰囲気の温かさ | 0-100 |
 | `anticipation` | 先取り感 | 0-100 |
-| `dissatisfaction` | 不満 | 0-100 |
-| `confidence` | 声の自信 | 0-100 |
+| `intensive_thinking` | 深い思考 | 0-100 |
+| `brain_power` | 認知負荷（脳活動） | 0-100 |
+| `atmosphere` | 雰囲気・会話傾向 | **-100 ～ 100（符号付き）** |
+| `excitement` | 興奮 | 0-30 |
+| `hesitation` | 躊躇 | 0-30 |
+| `uncertainty` | 不確実さ | 0-30 |
+| `imagination_activity` | 想像活動 | 0-30 |
+| `embarrassment` | 当惑 | 0-30 |
+| `passionate` | 情熱 | 0-30 |
+| `confidence` | 声の自信 | 0-30 |
+| `aggression` | 主張・攻撃性 | 0-30 |
+| `upset` | 動揺 | 0-30 |
+| `content` | 喜び・満足感 | 0-30 |
+| `dissatisfaction` | 不満 | 0-30 |
+| `extreme_emotion` | 極端な感情スパイク | 0-30 |
 
-**重要**: `emo_cog` は他のパラメータと値域が異なる（0-300 程度）。100超は仕様内の正常値であり「異常スパイク」と表現しないこと。150超を「高値」、200超を「非常に高い」と書く。
+**重要**:
+
+- `emo_cog` は他のパラメータと値域が異なる（1-500）。100超は仕様内の正常値であり「異常スパイク」と表現しないこと。200超を「高値」、350超を「非常に高い」と書く
+- `atmosphere` のみ符号付き（-100 ～ 100）。負値は会話の沈静側、正値は高揚側を示す
+- 0-30 系のパラメータ（excitement, hesitation, passionate, confidence など 12 個）は 0-100 系と混ぜて読まないこと。15 を「中程度」、25 超を「高値」と読む
 
 ## タスク
 
